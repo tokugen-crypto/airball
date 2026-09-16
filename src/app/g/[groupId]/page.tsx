@@ -17,7 +17,7 @@ export default async function GroupBoard({
   // RLS means a non-member simply gets nothing back here.
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, join_code, requires_approval")
+    .select("id, name, join_code, requires_approval, airball_enabled")
     .eq("id", groupId)
     .single();
   if (!group) notFound();
@@ -70,8 +70,10 @@ export default async function GroupBoard({
         name: group.name,
         joinCode: group.join_code,
         requiresApproval: group.requires_approval,
+        airballEnabled: group.airball_enabled,
       }}
       myAlias={me?.display_alias ?? ""}
+      myRole={(me?.role ?? "member") as "owner" | "mod" | "member"}
       memberCount={memberCount ?? 0}
     />
   );

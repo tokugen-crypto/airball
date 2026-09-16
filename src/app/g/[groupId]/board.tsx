@@ -12,27 +12,44 @@ import { createClient } from "@/lib/supabase/client";
 import {
   fetchBoard,
   fetchMessages,
+  fetchReports,
   fetchRoster,
   whenLabel,
   type BoardData,
   type HangoutRow,
   type MessageRow,
+  type ReportRow,
   type RosterRow,
 } from "@/lib/board";
 import { signOut } from "@/app/login/actions";
 import {
+  approveMember,
   arrive,
   clearRsvp,
+  deleteGroup,
   deleteHangout,
+  deleteReported,
   endHangout,
   leave,
   postHangout,
+  regenerateCode,
+  removeMember,
+  removeReportedAuthor,
+  reportContent,
+  resolveReport,
   sendMessage,
   setRsvp,
+  updateGroupSettings,
   type PostState,
 } from "./actions";
 
 type GroupRef = { id: string; name: string };
+type GroupInfo = {
+  name: string;
+  joinCode: string;
+  requiresApproval: boolean;
+  airballEnabled: boolean;
+};
 
 export default function Shell({
   groupId,
@@ -41,28 +58,38 @@ export default function Shell({
   groups,
   group,
   myAlias,
+  myRole,
   memberCount,
 }: {
   groupId: string;
   userId: string;
   initial: BoardData;
   groups: GroupRef[];
-  group: { name: string; joinCode: string; requiresApproval: boolean };
+  group: GroupInfo;
   myAlias: string;
+  myRole: "owner" | "mod" | "member";
   memberCount: number;
 }) {
+  const isStaff = myRole === "owner" || myRole === "mod";
   const [data, setData] = useState(initial);
   const [roster, setRoster] = useState<RosterRow[]>([]);
+  const [reports, setReports] = useState<ReportRow[]>([]);
   const [showMembers, setShowMembers] = useState(false);
-  const [selected, setSelected] = useState<string | "new" | null>(
+  const [selected, setSelected] = useState<string | "new" | "manage" | null>(
     () => initial.hangouts.find((h) => h.is_open)?.id ?? null,
   );
   const [drawer, setDrawer] = useState(false);
   const supabase = useRef(createClient()).current;
 
+  const reload = useRef(async () => {});
+  reload.current = async () => {
+    setRoster(await fetchRoster(supabase, groupId));
+    if (isStaff) setReports(await fetchReports(supabase, groupId));
+  };
+
   useEffect(() => {
-    fetchRoster(supabase, groupId).then(setRoster);
-  }, [supabase, groupId]);
+    reload.current();
+  }, [supabase, groupId, isStaff]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -70,7 +97,7 @@ export default function Shell({
       clearTimeout(timer);
       timer = setTimeout(async () => {
         setData(await fetchBoard(supabase, groupId, userId));
-        setRoster(await fetchRoster(supabase, groupId));
+        await reload.current();
       }, 120);
     };
 
@@ -143,6 +170,11 @@ export default function Shell({
             setShowMembers((v) => !v);
             setDrawer(false);
           }}
+          isStaff={isStaff}
+          needsAttention={
+            roster.filter((m) => m.status === "pending").length +
+            reports.filter((r) => !r.resolved_at).length
+          }
         />
       </div>
 
@@ -160,6 +192,8 @@ export default function Shell({
             <span className="block truncate text-sm font-semibold">
               {selected === "new" ? (
                 "New hangout"
+              ) : selected === "manage" ? (
+                "Manage group"
               ) : current ? (
                 <>
                   <span className="text-muted">#</span> {current.location_text}
@@ -188,6 +222,15 @@ export default function Shell({
           <div className="flex min-w-0 flex-1 flex-col">
             {selected === "new" ? (
               <PostPane groupId={groupId} onDone={(id) => setSelected(id)} />
+            ) : selected === "manage" ? (
+              <ManagePane
+                groupId={groupId}
+                group={group}
+                myRole={myRole}
+                roster={roster}
+                reports={reports}
+                onChanged={() => reload.current()}
+              />
             ) : current ? (
               <Detail
                 key={current.id}
@@ -289,16 +332,20 @@ function Sidebar({
   onSelect,
   membersOpen,
   onShowMembers,
+  isStaff,
+  needsAttention,
 }: {
-  group: { name: string; joinCode: string; requiresApproval: boolean };
+  group: GroupInfo;
   memberCount: number;
   myAlias: string;
   live: HangoutRow[];
   past: HangoutRow[];
-  selected: string | "new" | null;
-  onSelect: (id: string | "new") => void;
+  selected: string | "new" | "manage" | null;
+  onSelect: (id: string | "new" | "manage") => void;
   membersOpen: boolean;
   onShowMembers: () => void;
+  isStaff: boolean;
+  needsAttention: number;
 }) {
   return (
     <aside className="flex w-[264px] shrink-0 flex-col border-r border-line bg-page">
@@ -336,6 +383,24 @@ function Sidebar({
         >
           + Post where you are
         </button>
+
+        {isStaff && (
+          <button
+            onClick={() => onSelect("manage")}
+            className={`mb-3 flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition-colors ${
+              selected === "manage"
+                ? "bg-card font-semibold shadow-[inset_0_0_0_1px_var(--color-line)]"
+                : "text-text/80 hover:bg-card/70"
+            }`}
+          >
+            <span className="flex-1">Manage group</span>
+            {needsAttention > 0 && (
+              <span className="rounded-full bg-danger px-1.5 py-0.5 text-[11px] font-bold text-white">
+                {needsAttention}
+              </span>
+            )}
+          </button>
+        )}
 
         <Section title={`Happening now — ${live.length}`} />
         {live.length === 0 && (
@@ -522,6 +587,324 @@ function Person({ m, dim }: { m: RosterRow; dim?: boolean }) {
         )}
       </span>
     </div>
+  );
+}
+
+/* ── Owner tools ─────────────────────────────────────────────────────────
+   Note what the report queue does NOT show: who wrote the reported thing.
+   An owner who could see that could report any post themselves purely to
+   unmask its author. Staff act on content instead — delete it, or remove
+   whoever wrote it — and the identity never leaves the database. */
+
+function ManagePane({
+  groupId,
+  group,
+  myRole,
+  roster,
+  reports,
+  onChanged,
+}: {
+  groupId: string;
+  group: GroupInfo;
+  myRole: "owner" | "mod" | "member";
+  roster: RosterRow[];
+  reports: ReportRow[];
+  onChanged: () => void;
+}) {
+  const [busy, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+  const [code, setCode] = useState(group.joinCode);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const run = (fn: () => Promise<{ error: string } | null | void>) =>
+    start(async () => {
+      const r = await fn();
+      setErr(r && "error" in r ? r.error : null);
+      onChanged();
+    });
+
+  const pending = roster.filter((m) => m.status === "pending");
+  const members = roster.filter((m) => m.status === "approved");
+  const openReports = reports.filter((r) => !r.resolved_at);
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-[560px] space-y-4 px-5 py-6">
+        {err && (
+          <p className="border border-danger/40 bg-danger/5 px-3 py-2.5 text-sm text-danger">
+            {err}
+          </p>
+        )}
+
+        {/* Join code */}
+        <Panel title="Join code">
+          <div className="flex items-center gap-3">
+            <p className="flex-1 font-mono text-3xl font-bold tracking-[0.2em] text-gold">
+              {code}
+            </p>
+            {myRole === "owner" && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    const r = await regenerateCode(groupId);
+                    if (!r) setCode("……");
+                    return r;
+                  })
+                }
+                className="border border-line px-3 py-2 text-xs font-semibold disabled:opacity-40"
+              >
+                New code
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            Put this on a screen at a meeting. Making a new one locks out
+            anyone who has the old one but hasn&apos;t joined yet.
+          </p>
+        </Panel>
+
+        {/* Settings */}
+        {myRole === "owner" && (
+          <Panel title="Settings">
+            <Toggle
+              on={group.requiresApproval}
+              disabled={busy}
+              onChange={(v) =>
+                run(() =>
+                  updateGroupSettings(groupId, { requires_approval: v }),
+                )
+              }
+              label="I approve each new member"
+              hint="Off: the code lets people in instantly."
+            />
+            <Toggle
+              on={group.airballEnabled}
+              disabled={busy}
+              onChange={(v) =>
+                run(() => updateGroupSettings(groupId, { airball_enabled: v }))
+              }
+              label="Show the Airball tag"
+              hint="Marks posts nobody answered within an hour."
+            />
+          </Panel>
+        )}
+
+        {/* Requests */}
+        {pending.length > 0 && (
+          <Panel title={`Requests — ${pending.length}`}>
+            {pending.map((m) => (
+              <div
+                key={m.member_id ?? m.real_name}
+                className="flex items-start gap-3 border-b border-line-soft py-2.5 last:border-0"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">
+                    {m.real_name || "Unnamed"}
+                  </span>
+                  {m.join_reason && (
+                    <span className="block text-xs text-muted">
+                      “{m.join_reason}”
+                    </span>
+                  )}
+                </span>
+                <button
+                  disabled={busy || !m.member_id}
+                  onClick={() => run(() => approveMember(groupId, m.member_id!))}
+                  className="shrink-0 bg-green px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  Approve
+                </button>
+                <button
+                  disabled={busy || !m.member_id}
+                  onClick={() => run(() => removeMember(groupId, m.member_id!))}
+                  className="shrink-0 border border-line px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-40"
+                >
+                  Deny
+                </button>
+              </div>
+            ))}
+          </Panel>
+        )}
+
+        {/* Reports */}
+        <Panel title={`Reports — ${openReports.length} open`}>
+          {openReports.length === 0 ? (
+            <p className="text-sm text-muted">Nothing reported.</p>
+          ) : (
+            openReports.map((r) => (
+              <div
+                key={r.id}
+                className="border-b border-line-soft py-3 last:border-0"
+              >
+                <p className="text-[11px] tracking-wide text-muted uppercase">
+                  {r.target_type} · {timeAgo(r.created_at)}
+                </p>
+                <p className="mt-1 text-sm">
+                  {r.still_exists ? (
+                    <span className="break-words">“{r.content}”</span>
+                  ) : (
+                    <span className="text-muted">
+                      (already deleted)
+                    </span>
+                  )}
+                </p>
+                {r.reason && (
+                  <p className="mt-1 text-xs text-muted">
+                    Reported because: {r.reason}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {r.still_exists && (
+                    <button
+                      disabled={busy}
+                      onClick={() => run(() => deleteReported(groupId, r.id))}
+                      className="border border-line px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-40"
+                    >
+                      Delete it
+                    </button>
+                  )}
+                  {r.still_exists && (
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        run(() => removeReportedAuthor(groupId, r.id))
+                      }
+                      className="border border-line px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-40"
+                    >
+                      Remove whoever posted it
+                    </button>
+                  )}
+                  <button
+                    disabled={busy}
+                    onClick={() => run(() => resolveReport(groupId, r.id))}
+                    className="border border-line px-3 py-1.5 text-xs font-semibold text-muted disabled:opacity-40"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+          <p className="mt-3 text-[11px] leading-snug text-muted">
+            You can&apos;t see who posted a reported item, on purpose —
+            otherwise reporting anything would reveal its author. Removing
+            them works without showing you the name.
+          </p>
+        </Panel>
+
+        {/* Members */}
+        <Panel title={`Members — ${members.length}`}>
+          {members.map((m) => (
+            <div
+              key={m.member_id ?? m.real_name}
+              className="flex items-center gap-3 border-b border-line-soft py-2 last:border-0"
+            >
+              <span className="min-w-0 flex-1 text-sm">
+                {m.real_name || "Unnamed"}
+                {m.is_me && <span className="text-muted"> · you</span>}
+                {m.role !== "member" && (
+                  <span className="text-gold capitalize"> · {m.role}</span>
+                )}
+              </span>
+              {!m.is_me && m.role === "member" && (
+                <button
+                  disabled={busy || !m.member_id}
+                  onClick={() => run(() => removeMember(groupId, m.member_id!))}
+                  className="shrink-0 border border-line px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-40"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </Panel>
+
+        {/* Danger */}
+        {myRole === "owner" && (
+          <Panel title="Delete group">
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="border border-line px-4 py-2 text-xs font-semibold text-danger"
+              >
+                Delete this group
+              </button>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-muted">
+                  This deletes the group and every post, reply and membership
+                  in it, for all {members.length} members. It can&apos;t be
+                  undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    disabled={busy}
+                    onClick={() => run(() => deleteGroup(groupId))}
+                    className="bg-danger px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                  >
+                    Yes, delete it
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="border border-line px-3 py-2 text-xs font-semibold text-muted"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </Panel>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Panel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border border-line bg-card">
+      <h2 className="border-b border-line-soft px-4 py-2.5 text-[11px] font-bold tracking-wide text-muted uppercase">
+        {title}
+      </h2>
+      <div className="px-4 py-3">{children}</div>
+    </section>
+  );
+}
+
+function Toggle({
+  on,
+  onChange,
+  label,
+  hint,
+  disabled,
+}: {
+  on: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint: string;
+  disabled: boolean;
+}) {
+  return (
+    <label className="flex items-start gap-2.5 border-b border-line-soft py-2.5 last:border-0">
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 size-4 accent-[#21a179]"
+      />
+      <span className="text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="mt-0.5 block text-[11px] text-muted">{hint}</span>
+      </span>
+    </label>
   );
 }
 
@@ -797,6 +1180,17 @@ function Detail({
         )}
 
         <Thread hangoutId={h.id} groupId={groupId} replyCount={h.reply_count} />
+
+        {!h.is_mine && (
+          <div className="border-t border-line-soft px-5 py-3">
+            <ReportButton
+              groupId={groupId}
+              targetType="hangout"
+              targetId={h.id}
+              label="Report this post"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -897,6 +1291,15 @@ function Thread({
                   })}
                 </span>
                 <span className="mt-0.5 block break-words">{m.body}</span>
+                {!m.is_mine && (
+                  <ReportButton
+                    groupId={groupId}
+                    targetType="message"
+                    targetId={m.id}
+                    label="Report"
+                    small
+                  />
+                )}
               </span>
             </li>
           ))}
@@ -929,6 +1332,81 @@ function Thread({
   );
 }
 
+/* ── Reporting ───────────────────────────────────────────────────────────
+   There is deliberately no "block this person" here. Blocking would give
+   people away by subtraction: block someone, see which posts vanish, and
+   you know who wrote them. Reports go to the group's owner instead, who can
+   remove them — which is the remedy a gated group actually has. */
+
+function ReportButton({
+  groupId,
+  targetType,
+  targetId,
+  label,
+  small,
+}: {
+  groupId: string;
+  targetType: "hangout" | "message";
+  targetId: string;
+  label: string;
+  small?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, start] = useTransition();
+
+  if (sent)
+    return (
+      <p className={`text-muted ${small ? "text-[11px]" : "text-xs"}`}>
+        Reported. The group&apos;s owner will see it.
+      </p>
+    );
+
+  if (!open)
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className={`text-muted underline underline-offset-2 ${
+          small ? "mt-0.5 text-[11px]" : "text-xs"
+        }`}
+      >
+        {label}
+      </button>
+    );
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+      <input
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        autoFocus
+        maxLength={500}
+        placeholder="What's wrong with it? (optional)"
+        className="min-w-0 flex-1 border border-line bg-page px-2.5 py-1.5 text-xs outline-none placeholder:text-muted focus:border-muted"
+      />
+      <button
+        disabled={busy}
+        onClick={() =>
+          start(async () => {
+            await reportContent(groupId, targetType, targetId, reason);
+            setSent(true);
+          })
+        }
+        className="shrink-0 border border-line px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-40"
+      >
+        Send report
+      </button>
+      <button
+        onClick={() => setOpen(false)}
+        className="shrink-0 text-xs text-muted"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 /* ── Bits ────────────────────────────────────────────────────────────────── */
 
 function Tag({ tag, live }: { tag: HangoutRow["tag"]; live: boolean }) {
@@ -946,6 +1424,16 @@ function Tag({ tag, live }: { tag: HangoutRow["tag"]; live: boolean }) {
       </span>
     );
   return null;
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 const S = { width: 20, height: 20, viewBox: "0 0 24 24", strokeWidth: 1.7 };

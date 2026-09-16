@@ -37,6 +37,35 @@ export type RosterRow = {
   join_reason: string | null;
 };
 
+/**
+ * One row of `report_queue`. Deliberately carries no identity: an owner who
+ * could see who wrote reported content could report anything themselves to
+ * unmask its author.
+ */
+export type ReportRow = {
+  id: string;
+  group_id: string;
+  target_type: "hangout" | "message" | "user";
+  reason: string;
+  created_at: string;
+  resolved_at: string | null;
+  content: string | null;
+  still_exists: boolean;
+};
+
+export async function fetchReports(
+  supabase: SupabaseClient,
+  groupId: string,
+): Promise<ReportRow[]> {
+  const { data } = await supabase
+    .from("report_queue")
+    .select("*")
+    .eq("group_id", groupId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return (data ?? []) as ReportRow[];
+}
+
 export async function fetchRoster(
   supabase: SupabaseClient,
   groupId: string,

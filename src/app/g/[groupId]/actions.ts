@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export type PostState = { error: string } | null;
@@ -164,6 +165,97 @@ export async function sendMessage(
 
   revalidatePath(`/g/${groupId}`);
   return null;
+}
+
+/* ── Reporting and owner tools ───────────────────────────────────────────── */
+
+export async function reportContent(
+  groupId: string,
+  targetType: "hangout" | "message",
+  targetId: string,
+  reason: string,
+): Promise<{ error: string } | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You're signed out." };
+
+  const { error } = await supabase.from("reports").insert({
+    reporter_id: user.id,
+    group_id: groupId,
+    target_type: targetType,
+    target_id: targetId,
+    reason: reason.trim().slice(0, 500),
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath(`/g/${groupId}`);
+  return null;
+}
+
+/** Runs one of the moderation functions and returns its message on failure. */
+async function staffRpc(
+  fn: string,
+  args: Record<string, unknown>,
+  groupId: string,
+): Promise<{ error: string } | null> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc(fn, args);
+  if (error) return { error: error.message };
+  revalidatePath(`/g/${groupId}`);
+  return null;
+}
+
+export async function approveMember(groupId: string, userId: string) {
+  return staffRpc(
+    "set_member_status",
+    { p_group: groupId, p_user: userId, p_status: "approved" },
+    groupId,
+  );
+}
+
+export async function removeMember(groupId: string, userId: string) {
+  return staffRpc("remove_member", { p_group: groupId, p_user: userId }, groupId);
+}
+
+export async function regenerateCode(groupId: string) {
+  return staffRpc("regenerate_join_code", { p_group: groupId }, groupId);
+}
+
+export async function resolveReport(groupId: string, reportId: string) {
+  return staffRpc("resolve_report", { p_report: reportId }, groupId);
+}
+
+export async function deleteReported(groupId: string, reportId: string) {
+  return staffRpc("delete_reported_content", { p_report: reportId }, groupId);
+}
+
+/** Removes whoever posted it. Their identity never reaches the caller. */
+export async function removeReportedAuthor(groupId: string, reportId: string) {
+  return staffRpc("remove_reported_author", { p_report: reportId }, groupId);
+}
+
+export async function updateGroupSettings(
+  groupId: string,
+  patch: { requires_approval?: boolean; airball_enabled?: boolean },
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("groups")
+    .update(patch)
+    .eq("id", groupId);
+  if (error) return { error: error.message };
+  revalidatePath(`/g/${groupId}`);
+  return null;
+}
+
+export async function deleteGroup(groupId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("groups").delete().eq("id", groupId);
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  redirect("/");
 }
 
 /** Authors can always delete their own post — airballed or not. */
