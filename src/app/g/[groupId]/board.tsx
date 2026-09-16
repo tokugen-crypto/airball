@@ -12,10 +12,12 @@ import { createClient } from "@/lib/supabase/client";
 import {
   fetchBoard,
   fetchMessages,
+  fetchRoster,
   whenLabel,
   type BoardData,
   type HangoutRow,
   type MessageRow,
+  type RosterRow,
 } from "@/lib/board";
 import { signOut } from "@/app/login/actions";
 import {
@@ -50,6 +52,8 @@ export default function Shell({
   memberCount: number;
 }) {
   const [data, setData] = useState(initial);
+  const [roster, setRoster] = useState<RosterRow[]>([]);
+  const [showMembers, setShowMembers] = useState(false);
   const [selected, setSelected] = useState<string | "new" | null>(
     () => initial.hangouts.find((h) => h.is_open)?.id ?? null,
   );
@@ -57,11 +61,16 @@ export default function Shell({
   const supabase = useRef(createClient()).current;
 
   useEffect(() => {
+    fetchRoster(supabase, groupId).then(setRoster);
+  }, [supabase, groupId]);
+
+  useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const refetch = () => {
       clearTimeout(timer);
       timer = setTimeout(async () => {
         setData(await fetchBoard(supabase, groupId, userId));
+        setRoster(await fetchRoster(supabase, groupId));
       }, 120);
     };
 
@@ -133,36 +142,86 @@ export default function Shell({
       </div>
 
       <main className="flex min-w-0 flex-1 flex-col bg-card">
-        {/* Mobile-only bar: the sidebar is a drawer at this width. */}
-        <div className="flex h-[54px] shrink-0 items-center gap-3 border-b border-line px-4 md:hidden">
+        <header className="flex h-[54px] shrink-0 items-center gap-2.5 border-b border-line px-4">
           <button
             onClick={() => setDrawer(true)}
             aria-label="Open menu"
-            className="text-xl leading-none"
+            className="text-xl leading-none md:hidden"
           >
             ☰
           </button>
-          <span className="truncate text-sm font-semibold">
-            {selected === "new"
-              ? "New hangout"
-              : (current?.location_text ?? group.name)}
-          </span>
-        </div>
 
-        {selected === "new" ? (
-          <PostPane groupId={groupId} onDone={(id) => setSelected(id)} />
-        ) : current ? (
-          <Detail
-            key={current.id}
-            h={current}
-            groupId={groupId}
-            myRsvp={data.myRsvps[current.id]}
-            iAmHere={data.myPresence.includes(current.id)}
-            onGone={() => setSelected(null)}
-          />
-        ) : (
-          <Empty onNew={() => open("new")} hasAny={data.hangouts.length > 0} />
-        )}
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-sm font-semibold">
+              {selected === "new" ? (
+                "New hangout"
+              ) : current ? (
+                <>
+                  <span className="text-muted">#</span> {current.location_text}
+                </>
+              ) : (
+                group.name
+              )}
+            </span>
+            {current && (
+              <span className="block truncate text-xs text-muted">
+                {whenLabel(current)} · posted by {current.author_alias}
+                {current.is_mine && " (you)"}
+              </span>
+            )}
+          </span>
+
+          {current && (
+            <Tag
+              tag={current.tag}
+              live={current.here_count > 0 && current.is_open}
+            />
+          )}
+
+          <button
+            onClick={() => setShowMembers((v) => !v)}
+            title="Who's in this group"
+            className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${
+              showMembers ? "text-green" : "text-muted"
+            }`}
+          >
+            <PeopleIcon />
+            {memberCount}
+          </button>
+        </header>
+
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            {selected === "new" ? (
+              <PostPane groupId={groupId} onDone={(id) => setSelected(id)} />
+            ) : current ? (
+              <Detail
+                key={current.id}
+                h={current}
+                groupId={groupId}
+                myRsvp={data.myRsvps[current.id]}
+                iAmHere={data.myPresence.includes(current.id)}
+                onGone={() => setSelected(null)}
+              />
+            ) : (
+              <Empty
+                onNew={() => open("new")}
+                hasAny={data.hangouts.length > 0}
+              />
+            )}
+          </div>
+
+          {showMembers && (
+            <>
+              <button
+                aria-label="Close members"
+                onClick={() => setShowMembers(false)}
+                className="fixed inset-0 z-20 bg-text/20 lg:hidden"
+              />
+              <Members roster={roster} onClose={() => setShowMembers(false)} />
+            </>
+          )}
+        </div>
       </main>
     </div>
   );
@@ -370,6 +429,91 @@ function ChannelItem({
   );
 }
 
+/* ── Who's in the group ──────────────────────────────────────────────────
+   Real names, deliberately. The roster is public within the group while
+   posts and threads stay anonymous — you know the eighteen people in the
+   club, you just can't tell which one posted. Nothing in the feeds carries
+   a user id, so the two facts never meet. */
+
+function Members({
+  roster,
+  onClose,
+}: {
+  roster: RosterRow[];
+  onClose: () => void;
+}) {
+  const approved = roster.filter((m) => m.status === "approved");
+  const pending = roster.filter((m) => m.status === "pending");
+
+  return (
+    <aside className="fixed inset-y-0 right-0 z-30 w-[260px] shrink-0 overflow-y-auto border-l border-line bg-page lg:static lg:z-auto">
+      <div className="flex h-[54px] items-center justify-between border-b border-line px-4 lg:hidden">
+        <span className="text-sm font-semibold">Members</span>
+        <button onClick={onClose} className="text-sm text-muted">
+          Close
+        </button>
+      </div>
+
+      <div className="px-2 py-3">
+        {pending.length > 0 && (
+          <>
+            <p className="px-3 pt-1 pb-1.5 text-[11px] font-bold tracking-wide text-muted uppercase">
+              Waiting — {pending.length}
+            </p>
+            {pending.map((m) => (
+              <Person key={m.real_name + m.joined_at} m={m} dim />
+            ))}
+          </>
+        )}
+
+        <p className="px-3 pt-2 pb-1.5 text-[11px] font-bold tracking-wide text-muted uppercase">
+          Members — {approved.length}
+        </p>
+        {approved.map((m) => (
+          <Person key={m.real_name + m.joined_at} m={m} />
+        ))}
+
+        <p className="px-3 pt-4 text-[11px] leading-snug text-muted">
+          You can see who&apos;s here, but not who posted what. Posts and
+          replies stay anonymous.
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+function Person({ m, dim }: { m: RosterRow; dim?: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-2.5 rounded px-3 py-1.5 ${
+        dim ? "opacity-60" : ""
+      }`}
+    >
+      <span className="ring-letter grid size-7 shrink-0 place-items-center rounded-full">
+        <span className="grid size-[25px] place-items-center rounded-full bg-page text-[10px] font-bold">
+          {(m.real_name || "?").slice(0, 1).toUpperCase()}
+        </span>
+      </span>
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="block truncate text-sm">
+          {m.real_name || "Unnamed"}
+          {m.is_me && <span className="text-muted"> · you</span>}
+        </span>
+        {m.role !== "member" && (
+          <span className="block text-[11px] text-gold capitalize">
+            {m.role}
+          </span>
+        )}
+        {m.status === "pending" && (
+          <span className="block text-[11px] text-muted">
+            {m.join_reason ? `“${m.join_reason}”` : "waiting for approval"}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 /* ── Empty state ─────────────────────────────────────────────────────────── */
 
 function Empty({ onNew, hasAny }: { onNew: () => void; hasAny: boolean }) {
@@ -520,20 +664,6 @@ function Detail({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Channel header */}
-      <header className="hidden h-[54px] shrink-0 items-center gap-2.5 border-b border-line px-5 md:flex">
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-sm font-semibold">
-            <span className="text-muted">#</span> {h.location_text}
-          </span>
-          <span className="block truncate text-xs text-muted">
-            {whenLabel(h)} · posted by {h.author_alias}
-            {h.is_mine && " (you)"}
-          </span>
-        </span>
-        <Tag tag={h.tag} live={h.here_count > 0 && h.is_open} />
-      </header>
-
       <div className="min-h-0 flex-1 overflow-y-auto">
         {/* The counter, where a photo would be. */}
         <div className="border-b border-line-soft bg-gradient-to-br from-green-soft to-gold-soft px-6 py-10 text-center">
@@ -804,12 +934,6 @@ function Tag({ tag, live }: { tag: HangoutRow["tag"]; live: boolean }) {
         🏀 Airball
       </span>
     );
-  if (tag === "rebound")
-    return (
-      <span className="shrink-0 text-[10px] font-bold tracking-wide text-green uppercase">
-        Rebound
-      </span>
-    );
   return null;
 }
 
@@ -845,6 +969,26 @@ function ClockIcon() {
     <svg {...S} fill="none" stroke="currentColor">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5.2l3.2 1.9" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      strokeWidth="1.8"
+      fill="none"
+      stroke="currentColor"
+    >
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.8 19.5a6.2 6.2 0 0 1 12.4 0" strokeLinecap="round" />
+      <path
+        d="M16.2 5.2a3.2 3.2 0 0 1 0 5.6M17.5 14.2a6.2 6.2 0 0 1 3.7 5.3"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

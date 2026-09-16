@@ -18,8 +18,36 @@ export type HangoutRow = {
   reply_count: number;
   first_response_at: string | null;
   is_open: boolean;
-  tag: "airball" | "rebound" | null;
+  /** Set once an hour passes with no reply. Permanent — a late reply
+   *  doesn't clear it. */
+  tag: "airball" | null;
 };
+
+/** One row of `group_roster`: who is in the group, by real name. */
+export type RosterRow = {
+  group_id: string;
+  real_name: string;
+  display_alias: string;
+  role: "owner" | "mod" | "member";
+  status: "pending" | "approved" | "banned";
+  joined_at: string;
+  is_me: boolean;
+  /** Staff only — null for ordinary members. */
+  member_id: string | null;
+  join_reason: string | null;
+};
+
+export async function fetchRoster(
+  supabase: SupabaseClient,
+  groupId: string,
+): Promise<RosterRow[]> {
+  const { data } = await supabase
+    .from("group_roster")
+    .select("*")
+    .eq("group_id", groupId)
+    .order("joined_at", { ascending: true });
+  return (data ?? []) as RosterRow[];
+}
 
 export type BoardData = {
   hangouts: HangoutRow[];
