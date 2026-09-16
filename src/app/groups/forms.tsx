@@ -7,8 +7,8 @@ export default function GroupForms() {
   const [tab, setTab] = useState<"join" | "create">("join");
 
   return (
-    <section className="rounded-2xl border border-line bg-surface p-4">
-      <div className="mb-4 flex gap-1 rounded-xl bg-ink p-1">
+    <section className="border border-line bg-card">
+      <div className="flex border-b border-line">
         <Tab active={tab === "join"} onClick={() => setTab("join")}>
           Join a group
         </Tab>
@@ -16,7 +16,9 @@ export default function GroupForms() {
           Start a group
         </Tab>
       </div>
-      {tab === "join" ? <JoinForm /> : <CreateForm />}
+      <div className="p-4">
+        {tab === "join" ? <JoinForm /> : <CreateForm />}
+      </div>
     </section>
   );
 }
@@ -33,8 +35,10 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "bg-surface text-text" : "text-muted"
+      className={`flex-1 py-3 text-xs font-semibold tracking-wide uppercase transition-colors ${
+        active
+          ? "border-b border-text text-text"
+          : "border-b border-transparent text-muted"
       }`}
     >
       {children}
@@ -49,36 +53,29 @@ function JoinForm() {
   );
 
   return (
-    <form action={formAction} className="space-y-3">
-      <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-muted">
-          Join code
-        </span>
-        <input
-          name="code"
-          required
-          maxLength={6}
-          autoCapitalize="characters"
-          autoComplete="off"
-          placeholder="7F2K9Q"
-          className="w-full rounded-xl border border-line bg-ink px-3.5 py-3 text-center font-mono text-2xl tracking-[0.3em] uppercase outline-none placeholder:text-muted/40 focus:border-green"
-        />
-      </label>
+    <form action={formAction} className="space-y-2.5">
+      <input
+        name="code"
+        required
+        maxLength={6}
+        autoCapitalize="characters"
+        autoComplete="off"
+        placeholder="CODE"
+        className="w-full border border-line bg-page px-2.5 py-3 text-center font-mono text-2xl tracking-[0.35em] uppercase outline-none placeholder:tracking-[0.2em] placeholder:text-muted focus:border-muted"
+      />
+      <p className="text-center text-[11px] text-muted">
+        Six characters, handed out at a meeting.
+      </p>
 
-      <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-muted">
-          Why do you want to join?{" "}
-          <span className="font-normal">(optional)</span>
-        </span>
-        <textarea
-          name="reason"
-          rows={2}
-          className="w-full resize-none rounded-xl border border-line bg-ink px-3.5 py-3 text-sm outline-none focus:border-green"
-        />
-        <span className="mt-1.5 block text-xs text-muted">
-          Only used if the group needs an owner to approve you.
-        </span>
-      </label>
+      <textarea
+        name="reason"
+        rows={2}
+        placeholder="Why do you want to join? (optional)"
+        className="w-full resize-none border border-line bg-page px-2.5 py-2.5 text-xs outline-none placeholder:text-muted focus:border-muted"
+      />
+      <p className="text-[11px] text-muted">
+        Only used if the group needs an owner to approve you.
+      </p>
 
       <Error state={state} />
       <Submit pending={pending}>Join</Submit>
@@ -93,45 +90,36 @@ function CreateForm() {
   );
 
   return (
-    <form action={formAction} className="space-y-3">
-      <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-muted">
-          Group name
-        </span>
-        <input
-          name="name"
-          required
-          maxLength={60}
-          placeholder="Rubik's Cube Club"
-          className="w-full rounded-xl border border-line bg-ink px-3.5 py-3 outline-none placeholder:text-muted/40 focus:border-green"
-        />
-      </label>
+    <form action={formAction} className="space-y-2.5">
+      <input
+        name="name"
+        required
+        maxLength={60}
+        placeholder="Group name"
+        className="w-full border border-line bg-page px-2.5 py-2.5 text-xs outline-none placeholder:text-muted focus:border-muted"
+      />
 
-      <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-muted">
-          Call members…
-        </span>
-        <input
-          name="alias_prefix"
-          maxLength={20}
-          placeholder="Cuber"
-          className="w-full rounded-xl border border-line bg-ink px-3.5 py-3 outline-none placeholder:text-muted/40 focus:border-green"
-        />
-        <span className="mt-1.5 block text-xs text-muted">
-          Members get anonymous aliases like “Cuber #4”. Real names stay visible
-          to you only.
-        </span>
-      </label>
+      <input
+        name="alias_prefix"
+        maxLength={20}
+        placeholder="Call members… (e.g. Cuber)"
+        className="w-full border border-line bg-page px-2.5 py-2.5 text-xs outline-none placeholder:text-muted focus:border-muted"
+      />
+      <p className="text-[11px] leading-snug text-muted">
+        Everyone posts as “Cuber”, with a letter that changes on every post —
+        conversations stay readable, nobody can be followed around. Real names
+        are visible to you alone, for approvals.
+      </p>
 
-      <label className="flex items-start gap-3 rounded-xl border border-line px-3.5 py-3">
+      <label className="flex items-start gap-2.5 border border-line px-2.5 py-2.5">
         <input
           name="requires_approval"
           type="checkbox"
-          className="mt-0.5 size-4 accent-[#3DD68C]"
+          className="mt-0.5 size-4 accent-[#21a179]"
         />
-        <span className="text-sm">
-          <span className="font-medium">I approve each member</span>
-          <span className="mt-0.5 block text-xs text-muted">
+        <span className="text-xs">
+          <span className="font-semibold">I approve each member</span>
+          <span className="mt-0.5 block text-[11px] text-muted">
             Off: the code lets people in instantly — best for handing out at a
             meeting.
           </span>
@@ -146,11 +134,7 @@ function CreateForm() {
 
 function Error({ state }: { state: GroupState }) {
   if (!state?.error) return null;
-  return (
-    <p className="rounded-xl bg-danger/10 px-3 py-2.5 text-sm text-danger">
-      {state.error}
-    </p>
-  );
+  return <p className="text-center text-sm text-danger">{state.error}</p>;
 }
 
 function Submit({
@@ -164,7 +148,7 @@ function Submit({
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-xl bg-green px-4 py-3 font-semibold text-ink transition-colors active:bg-green-deep disabled:opacity-50"
+      className="w-full bg-green py-2.5 text-sm font-semibold text-white active:bg-green-deep disabled:opacity-40"
     >
       {pending ? "…" : children}
     </button>

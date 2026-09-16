@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchBoard } from "@/lib/board";
+import TopBar from "@/components/topbar";
 import Board from "./board";
 
 export default async function GroupBoard({
@@ -32,14 +33,14 @@ export default async function GroupBoard({
 
   if (me?.status === "pending") {
     return (
-      <main className="mx-auto w-full max-w-lg px-5 py-8">
-        <Link href="/groups" className="text-sm text-muted underline underline-offset-4">
-          ← All groups
-        </Link>
-        <p className="mt-8 rounded-2xl border border-dashed border-line px-4 py-10 text-center text-muted">
-          Waiting for an owner to let you into {group.name}.
-        </p>
-      </main>
+      <>
+        <TopBar left={<BackLink />} title={<Title>{group.name}</Title>} />
+        <main className="mx-auto w-full max-w-[614px] px-4 py-5">
+          <p className="border border-line bg-card px-6 py-12 text-center text-sm text-muted">
+            Waiting for an owner to let you into {group.name}.
+          </p>
+        </main>
+      </>
     );
   }
 
@@ -52,23 +53,66 @@ export default async function GroupBoard({
   const initial = await fetchBoard(supabase, groupId, user.id);
 
   return (
-    <main className="mx-auto w-full max-w-lg px-5 py-6 pb-24">
-      <div className="flex items-center justify-between gap-3">
-        <Link href="/groups" className="text-sm text-muted underline underline-offset-4">
-          ← All groups
-        </Link>
-        <span className="font-mono text-sm text-muted">{group.join_code}</span>
-      </div>
+    <>
+      <TopBar left={<BackLink />} title={<Title>{group.name}</Title>} />
 
-      <header className="mt-3 mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">{group.name}</h1>
-        <p className="mt-1 text-sm text-muted">
-          {memberCount ?? 0} member{memberCount === 1 ? "" : "s"} · you are{" "}
-          <span className="text-text">{me?.display_alias}</span>
-        </p>
-      </header>
+      <main className="mx-auto w-full max-w-[614px] px-4 py-5">
+        {/* Profile header, Instagram-style: avatar left, numbers right. */}
+        <section className="mb-4 border border-line bg-card p-4">
+          <div className="flex items-center gap-5">
+            <span className="ring-letter grid size-[72px] shrink-0 place-items-center rounded-full">
+              <span className="grid size-[64px] place-items-center rounded-full bg-card text-lg font-semibold">
+                {group.name.slice(0, 2).toUpperCase()}
+              </span>
+            </span>
 
-      <Board groupId={groupId} userId={user.id} initial={initial} />
-    </main>
+            <div className="flex min-w-0 flex-1 justify-around text-center">
+              <Stat n={memberCount ?? 0} label={memberCount === 1 ? "member" : "members"} />
+              <div>
+                <p className="font-mono text-base font-semibold tracking-wider text-gold">
+                  {group.join_code}
+                </p>
+                <p className="text-xs text-muted">join code</p>
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm">
+            <span className="font-semibold">{group.name}</span>
+            <span className="mt-0.5 block text-muted">
+              You post as {me?.display_alias}. {" "}
+              {group.requires_approval
+                ? "New members need approval."
+                : "Anyone with the code joins instantly."}
+            </span>
+          </p>
+        </section>
+
+        <Board groupId={groupId} userId={user.id} initial={initial} />
+      </main>
+    </>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link href="/groups" className="text-2xl leading-none text-text">
+      ‹
+    </Link>
+  );
+}
+
+function Title({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="block truncate text-base font-semibold">{children}</span>
+  );
+}
+
+function Stat({ n, label }: { n: number; label: string }) {
+  return (
+    <div>
+      <p className="text-base font-semibold">{n}</p>
+      <p className="text-xs text-muted">{label}</p>
+    </div>
   );
 }

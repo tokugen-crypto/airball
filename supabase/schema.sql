@@ -59,7 +59,9 @@ create table if not exists public.hangouts (
   location_text text not null check (length(trim(location_text)) between 1 and 120),
   note          text not null default '',
   starts_at     timestamptz not null default now(),
-  ends_at       timestamptz not null,
+  -- Nobody states how long they'll stay. This is just a cap so stale posts
+  -- fall off the board; presence is answered by the attendance counter.
+  ends_at       timestamptz not null default (now() + interval '12 hours'),
   created_at    timestamptz not null default now(),
   check (ends_at > starts_at)
 );
@@ -174,8 +176,6 @@ returns uuid language plpgsql security definer
 set search_path = public as $$
 declare
   g        record;
-  n        int;
-  v_alias  text;
   v_status text;
 begin
   select * into g from groups where upper(join_code) = upper(trim(p_code));
@@ -189,12 +189,12 @@ begin
     return g.id;
   end if;
 
-  select count(*) + 1 into n from group_members where group_id = g.id;
-  v_alias  := g.alias_prefix || ' #' || n;
   v_status := case when g.requires_approval then 'pending' else 'approved' end;
 
+  -- Every member of a group shares one alias. A per-person number would be a
+  -- pseudonym, not anonymity: stable across posts, so people could be tracked.
   insert into group_members (group_id, user_id, display_alias, status, join_reason)
-  values (g.id, auth.uid(), v_alias, v_status, coalesce(p_reason, ''));
+  values (g.id, auth.uid(), g.alias_prefix, v_status, coalesce(p_reason, ''));
 
   return g.id;
 end;
@@ -209,8 +209,9 @@ create or replace function public.create_group(
 returns uuid language plpgsql security definer
 set search_path = public as $$
 declare
-  v_code text;
-  v_id   uuid;
+  v_code   text;
+  v_id     uuid;
+  v_prefix text := coalesce(nullif(trim(p_alias_prefix), ''), 'Member');
 begin
   -- No 0/O/1/I — these get read off a projector screen at a club meeting.
   loop
@@ -222,13 +223,11 @@ begin
   end loop;
 
   insert into groups (name, owner_id, join_code, alias_prefix, requires_approval)
-  values (trim(p_name), auth.uid(), v_code, coalesce(nullif(trim(p_alias_prefix), ''), 'Member'),
-          coalesce(p_requires_approval, false))
+  values (trim(p_name), auth.uid(), v_code, v_prefix, coalesce(p_requires_approval, false))
   returning id into v_id;
 
   insert into group_members (group_id, user_id, display_alias, role, status)
-  values (v_id, auth.uid(), coalesce(nullif(trim(p_alias_prefix), ''), 'Member') || ' #1',
-          'owner', 'approved');
+  values (v_id, auth.uid(), v_prefix, 'owner', 'approved');
 
   return v_id;
 end;
@@ -249,7 +248,9 @@ select
   h.ends_at,
   h.created_at,
   gm.display_alias                      as author_alias,
-  coalesce(att.here_count, 0)::int      as here_count,
+  -- People forget to tap "Leaving", so a closed hangout reports nobody there.
+  case when now() < h.ends_at
+       then coalesce(att.here_count, 0) else 0 end::int as here_count,
   coalesce(rs.otw_count, 0)::int        as otw_count,
   coalesce(msg.reply_count, 0)::int     as reply_count,
   fr.first_response_at,

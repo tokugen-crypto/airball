@@ -4,12 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type HangoutRow = {
   id: string;
   group_id: string;
-  author_id: string;
   location_text: string;
   note: string;
   starts_at: string;
   ends_at: string;
   created_at: string;
+  /** No user id is ever sent to the client. This is how "mine" is known. */
+  is_mine: boolean;
+  /** "Cuber A" — the letter is scoped to this hangout only. */
   author_alias: string | null;
   here_count: number;
   otw_count: number;
@@ -62,25 +64,42 @@ export async function fetchBoard(
   };
 }
 
-/** "3:40" / "now" / "in 20 min" — short enough to scan standing up. */
+/** One row of `message_feed`. Carries a letter, never a user id. */
+export type MessageRow = {
+  id: string;
+  hangout_id: string;
+  body: string;
+  created_at: string;
+  is_mine: boolean;
+  alias: string | null;
+};
+
+export async function fetchMessages(
+  supabase: SupabaseClient,
+  hangoutId: string,
+): Promise<MessageRow[]> {
+  const { data } = await supabase
+    .from("message_feed")
+    .select("*")
+    .eq("hangout_id", hangoutId)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as MessageRow[];
+}
+
+/**
+ * "now" / "in 20 min" / "3:40" — short enough to scan standing up.
+ *
+ * No end time is ever shown. Nobody states how long they'll stay; the
+ * attendance counter answers who is actually there.
+ */
 export function whenLabel(row: HangoutRow): string {
   const start = new Date(row.starts_at);
-  const end = new Date(row.ends_at);
   const now = Date.now();
 
-  if (now > end.getTime()) return "ended";
-
-  const time = end.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  if (now >= start.getTime()) return `now · until ${time}`;
+  if (now > new Date(row.ends_at).getTime()) return "ended";
+  if (now >= start.getTime()) return "now";
 
   const mins = Math.round((start.getTime() - now) / 60_000);
-  if (mins < 60) return `in ${mins} min · until ${time}`;
-  return `${start.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  })} · until ${time}`;
+  if (mins < 60) return `in ${mins} min`;
+  return start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }

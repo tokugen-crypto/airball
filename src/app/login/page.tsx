@@ -12,85 +12,104 @@ export default function LoginPage() {
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-10">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold tracking-tight">
-          Air<span className="text-gold">ball</span>
+    <main className="mx-auto flex min-h-dvh w-full max-w-[350px] flex-col justify-center px-4 py-10">
+      <div className="border border-line bg-card px-8 py-10">
+        <h1 className="mb-8 text-center font-script text-5xl leading-none text-text">
+          Airball
         </h1>
-        <p className="mt-2 text-muted">Post where you are. See who shows up.</p>
-      </div>
 
-      {/* Keyed so React rebuilds the form (and clears errors) on mode switch. */}
-      <form key={mode} action={formAction} className="space-y-3">
-        {mode === "up" && (
+        <form key={mode} action={formAction} className="space-y-1.5">
+          {mode === "up" && (
+            <Field
+              name="real_name"
+              placeholder="Full name"
+              autoComplete="name"
+            />
+          )}
           <Field
-            name="real_name"
-            label="Your name"
-            hint="Only group owners see this. Everyone else sees your alias."
-            autoComplete="name"
+            name="email"
+            type="email"
+            placeholder="Email"
+            autoComplete="email"
           />
-        )}
-        <Field name="email" label="Email" type="email" autoComplete="email" />
-        <Field
-          name="password"
-          label="Password"
-          type="password"
-          autoComplete={mode === "in" ? "current-password" : "new-password"}
-        />
+          <Field
+            name="password"
+            type="password"
+            placeholder="Password"
+            autoComplete={mode === "in" ? "current-password" : "new-password"}
+          />
+
+          {mode === "up" && (
+            <p className="px-1 pt-1 pb-1 text-center text-[11px] leading-snug text-muted">
+              Your name is only ever shown to the owner of a group you join, so
+              they can let you in. Everyone else sees an anonymous alias.
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={pending}
+            className="!mt-3 w-full bg-green py-2 text-sm font-semibold text-white transition-opacity active:bg-green-deep disabled:opacity-40"
+          >
+            {pending ? "…" : mode === "in" ? "Log in" : "Sign up"}
+          </button>
+        </form>
 
         {state?.error && (
-          <p className="rounded-xl bg-danger/10 px-3 py-2.5 text-sm text-danger">
-            {state.error}
-          </p>
+          <p className="mt-4 text-center text-sm text-danger">{state.error}</p>
         )}
+      </div>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-full rounded-xl bg-green px-4 py-3 font-semibold text-ink transition-colors active:bg-green-deep disabled:opacity-50"
-        >
-          {pending ? "…" : mode === "in" ? "Sign in" : "Create account"}
-        </button>
-      </form>
+      <div className="mt-2.5 border border-line bg-card px-8 py-5 text-center text-sm">
+        {mode === "in" ? (
+          <>
+            Don&apos;t have an account?{" "}
+            <button
+              onClick={() => setMode("up")}
+              className="font-semibold text-green"
+            >
+              Sign up
+            </button>
+          </>
+        ) : (
+          <>
+            Have an account?{" "}
+            <button
+              onClick={() => setMode("in")}
+              className="font-semibold text-green"
+            >
+              Log in
+            </button>
+          </>
+        )}
+      </div>
 
-      <button
-        onClick={() => setMode(mode === "in" ? "up" : "in")}
-        className="mt-6 text-sm text-muted underline underline-offset-4"
-      >
-        {mode === "in"
-          ? "No account yet? Create one"
-          : "Already have an account? Sign in"}
-      </button>
+      <p className="mt-6 text-center text-xs text-muted">
+        Post where you are. See who shows up.
+      </p>
     </main>
   );
 }
 
 function Field({
   name,
-  label,
-  hint,
+  placeholder,
   type = "text",
   autoComplete,
 }: {
   name: string;
-  label: string;
-  hint?: string;
+  placeholder: string;
   type?: string;
   autoComplete?: string;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-muted">
-        {label}
-      </span>
-      <input
-        name={name}
-        type={type}
-        autoComplete={autoComplete}
-        required
-        className="w-full rounded-xl border border-line bg-surface px-3.5 py-3 text-text outline-none placeholder:text-muted/60 focus:border-green"
-      />
-      {hint && <span className="mt-1.5 block text-xs text-muted">{hint}</span>}
-    </label>
+    <input
+      name={name}
+      type={type}
+      placeholder={placeholder}
+      autoComplete={autoComplete}
+      required
+      className="w-full border border-line bg-page px-2.5 py-2.5 text-xs outline-none placeholder:text-muted focus:border-muted"
+    />
   );
 }

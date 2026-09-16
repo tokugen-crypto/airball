@@ -1,30 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Grand_Hotel } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Stands in for Instagram's Billabong wordmark.
+const script = Grand_Hotel({
+  variable: "--font-script",
   subsets: ["latin"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
   title: "Airball",
   description: "Post where you are. See who shows up.",
-  appleWebApp: {
-    capable: true,
-    title: "Airball",
-    statusBarStyle: "black-translucent",
-  },
+  appleWebApp: { capable: true, title: "Airball", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f1511",
-  // The app is used one-handed, standing up. Let it fill the screen.
+  themeColor: "#ffffff",
   viewportFit: "cover",
 };
 
@@ -32,11 +29,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${script.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-ink text-text">
-        {children}
-      </body>
+      <body className="min-h-full bg-page text-text">{children}</body>
     </html>
   );
 }

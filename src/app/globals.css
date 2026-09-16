@@ -1,43 +1,47 @@
 @import "tailwindcss";
 
 /* ── Airball design tokens ───────────────────────────────────────────────
-   Green = actions you take.  Gold = something happening right now.
-   Dark-only by design; there is no light theme.
+   2016 Instagram: white paper, hairline grey rules, very small bold type,
+   colour used sparingly. Green = actions you take. Gold = happening now.
    ──────────────────────────────────────────────────────────────────────── */
 @theme {
-  --color-ink: #0f1511; /* page background, near-black green-tinted */
-  --color-surface: #1a221d; /* cards, panels */
-  --color-raised: #222c26; /* hover / nested surface */
-  --color-line: #2a352e; /* borders, dividers */
+  --color-page: #fafafa; /* the grey behind the cards */
+  --color-card: #ffffff;
+  --color-line: #dbdbdb; /* hairline borders */
+  --color-line-soft: #efefef; /* dividers inside a card */
 
-  --color-green: #3dd68c; /* primary action */
-  --color-green-deep: #2aa76b; /* pressed / darker green */
-  --color-gold: #f0c75e; /* live, active, the counter */
-  --color-gold-deep: #c9a23f;
+  --color-text: #262626;
+  --color-muted: #8e8e8e;
 
-  --color-text: #edf2ee;
-  --color-muted: #9aa89f;
-  --color-danger: #e5645e; /* leave, report, deny */
-  --color-shrug: #7a8a80; /* the Airball tag — a shrug, not an alarm */
+  --color-green: #21a179; /* passes contrast on white */
+  --color-green-deep: #17805f;
+  --color-green-soft: #e8f7f0;
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-gold: #b8860b; /* gold dark enough to read as text */
+  --color-gold-bright: #f0c75e; /* gold for fills and big numerals */
+  --color-gold-soft: #fdf5e0;
+
+  --color-danger: #ed4956;
+  --color-shrug: #b0b0b0; /* the airball tag — a shrug, not an alarm */
+
+  --font-sans: var(--font-inter);
+  --font-script: var(--font-script); /* the wordmark */
 }
 
 html {
-  color-scheme: dark;
-  background: var(--color-ink);
+  color-scheme: light;
+  background: var(--color-page);
 }
 
 body {
-  background: var(--color-ink);
+  background: var(--color-page);
   color: var(--color-text);
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
-  /* Never let the page rubber-band horizontally on a phone. */
+  font-family:
+    var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
   overflow-x: hidden;
 }
 
-/* Tap targets shouldn't flash blue on iOS. */
 * {
   -webkit-tap-highlight-color: transparent;
 }
@@ -62,4 +66,9 @@ body {
   .animate-pop {
     animation: none;
   }
+}
+
+/* Instagram's story ring, reused for a poster's letter. */
+.ring-letter {
+  background: linear-gradient(45deg, #f0c75e, #21a179);
 }

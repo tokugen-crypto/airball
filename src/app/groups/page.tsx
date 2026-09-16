@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import TopBar from "@/components/topbar";
 import { signOut } from "../login/actions";
 import GroupForms from "./forms";
 
@@ -23,83 +24,94 @@ export default async function GroupsPage() {
   const pending = rows.filter((m) => m.status === "pending");
 
   return (
-    <main className="mx-auto w-full max-w-lg px-5 py-8 pb-24">
-      <header className="mb-8 flex items-baseline justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Air<span className="text-gold">ball</span>
-        </h1>
-        <form action={signOut}>
-          <button className="text-sm text-muted underline underline-offset-4">
-            Sign out
-          </button>
-        </form>
-      </header>
+    <>
+      <TopBar
+        right={
+          <form action={signOut}>
+            <button className="text-sm font-semibold text-green">
+              Log out
+            </button>
+          </form>
+        }
+      />
 
-      {approved.length > 0 && (
-        <section className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted uppercase">
-            Your groups
-          </h2>
-          <ul className="space-y-2">
-            {approved.map((m) => {
-              const g = m.groups as unknown as {
-                id: string;
-                name: string;
-                join_code: string;
-              };
-              return (
-                <li key={g.id}>
-                  <Link
-                    href={`/g/${g.id}`}
-                    className="flex items-center justify-between rounded-2xl border border-line bg-surface px-4 py-4 active:bg-raised"
+      <main className="mx-auto w-full max-w-[614px] px-4 py-5">
+        {approved.length > 0 && (
+          <section className="mb-4 border border-line bg-card">
+            <h2 className="border-b border-line-soft px-4 py-3 text-xs font-semibold tracking-wide text-muted uppercase">
+              Your groups
+            </h2>
+            <ul>
+              {approved.map((m) => {
+                const g = m.groups as unknown as {
+                  id: string;
+                  name: string;
+                  join_code: string;
+                };
+                return (
+                  <li key={g.id} className="border-b border-line-soft last:border-0">
+                    <Link
+                      href={`/g/${g.id}`}
+                      className="flex items-center gap-3 px-4 py-3 active:bg-page"
+                    >
+                      <span className="ring-letter grid size-11 shrink-0 place-items-center rounded-full">
+                        <span className="grid size-[38px] place-items-center rounded-full bg-card text-sm font-semibold text-text">
+                          {g.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">
+                          {g.name}
+                        </span>
+                        <span className="block truncate text-sm text-muted">
+                          you post as {m.display_alias}
+                          {m.role !== "member" && ` · ${m.role}`}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-mono text-xs tracking-wider text-muted">
+                        {g.join_code}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {pending.length > 0 && (
+          <section className="mb-4 border border-line bg-card">
+            <h2 className="border-b border-line-soft px-4 py-3 text-xs font-semibold tracking-wide text-muted uppercase">
+              Waiting for approval
+            </h2>
+            <ul>
+              {pending.map((m) => {
+                const g = m.groups as unknown as { id: string; name: string };
+                return (
+                  <li
+                    key={g.id}
+                    className="border-b border-line-soft px-4 py-3 text-sm text-muted last:border-0"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{g.name}</p>
-                      <p className="text-sm text-muted">
-                        {m.display_alias}
-                        {m.role !== "member" && ` · ${m.role}`}
-                      </p>
-                    </div>
-                    <span className="ml-3 shrink-0 font-mono text-sm text-muted">
-                      {g.join_code}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+                    {g.name} · pending
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
-      {pending.length > 0 && (
-        <section className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted uppercase">
-            Waiting for approval
-          </h2>
-          <ul className="space-y-2">
-            {pending.map((m) => {
-              const g = m.groups as unknown as { id: string; name: string };
-              return (
-                <li
-                  key={g.id}
-                  className="rounded-2xl border border-dashed border-line px-4 py-4 text-muted"
-                >
-                  {g.name} · pending
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+        {approved.length === 0 && pending.length === 0 && (
+          <div className="mb-4 border border-line bg-card px-6 py-10 text-center">
+            <p className="font-script text-4xl leading-none">Airball</p>
+            <p className="mt-3 text-sm text-muted">
+              You&apos;re not in any groups yet. Join one with a code, or start
+              your own.
+            </p>
+          </div>
+        )}
 
-      {approved.length === 0 && pending.length === 0 && (
-        <p className="mb-8 rounded-2xl border border-dashed border-line px-4 py-6 text-center text-muted">
-          You&apos;re not in any groups yet. Join one with a code, or start your
-          own.
-        </p>
-      )}
-
-      <GroupForms />
-    </main>
+        <GroupForms />
+      </main>
+    </>
   );
 }
