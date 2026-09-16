@@ -138,6 +138,11 @@ export default function Shell({
           past={past}
           selected={selected}
           onSelect={open}
+          membersOpen={showMembers}
+          onShowMembers={() => {
+            setShowMembers((v) => !v);
+            setDrawer(false);
+          }}
         />
       </div>
 
@@ -177,17 +182,6 @@ export default function Shell({
               live={current.here_count > 0 && current.is_open}
             />
           )}
-
-          <button
-            onClick={() => setShowMembers((v) => !v)}
-            title="Who's in this group"
-            className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${
-              showMembers ? "text-green" : "text-muted"
-            }`}
-          >
-            <PeopleIcon />
-            {memberCount}
-          </button>
         </header>
 
         <div className="flex min-h-0 flex-1">
@@ -293,6 +287,8 @@ function Sidebar({
   past,
   selected,
   onSelect,
+  membersOpen,
+  onShowMembers,
 }: {
   group: { name: string; joinCode: string; requiresApproval: boolean };
   memberCount: number;
@@ -301,18 +297,33 @@ function Sidebar({
   past: HangoutRow[];
   selected: string | "new" | null;
   onSelect: (id: string | "new") => void;
+  membersOpen: boolean;
+  onShowMembers: () => void;
 }) {
   return (
     <aside className="flex w-[264px] shrink-0 flex-col border-r border-line bg-page">
-      <header className="shrink-0 border-b border-line px-4 py-3">
-        <p className="truncate text-sm font-semibold">{group.name}</p>
+      {/* The club name opens the member list, the way a server name does. */}
+      <button
+        onClick={onShowMembers}
+        title="See who's in this group"
+        className={`shrink-0 border-b border-line px-4 py-3 text-left transition-colors ${
+          membersOpen ? "bg-card" : "hover:bg-card/70"
+        }`}
+      >
+        <p
+          className={`truncate text-sm font-semibold ${
+            membersOpen ? "text-green" : ""
+          }`}
+        >
+          {group.name}
+        </p>
         <p className="mt-0.5 text-xs text-muted">
           {memberCount} member{memberCount === 1 ? "" : "s"} · code{" "}
           <span className="font-mono tracking-wider text-gold">
             {group.joinCode}
           </span>
         </p>
-      </header>
+      </button>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         <button
@@ -969,26 +980,6 @@ function ClockIcon() {
     <svg {...S} fill="none" stroke="currentColor">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5.2l3.2 1.9" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PeopleIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      strokeWidth="1.8"
-      fill="none"
-      stroke="currentColor"
-    >
-      <circle cx="9" cy="8" r="3.2" />
-      <path d="M2.8 19.5a6.2 6.2 0 0 1 12.4 0" strokeLinecap="round" />
-      <path
-        d="M16.2 5.2a3.2 3.2 0 0 1 0 5.6M17.5 14.2a6.2 6.2 0 0 1 3.7 5.3"
-        strokeLinecap="round"
-      />
     </svg>
   );
 }
