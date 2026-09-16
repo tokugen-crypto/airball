@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * Without this, server components see a logged-in user as logged out once the
  * access token expires, and people get mysteriously bounced to sign-in.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   // No env vars yet (fresh clone, before Supabase is set up) — don't crash.

@@ -214,7 +214,7 @@ function GroupRail({
       })}
 
       <Link
-        href="/groups"
+        href="/"
         title="Join or start a group"
         className="grid size-11 place-items-center rounded-full border border-dashed border-line text-lg text-green"
       >

@@ -16,7 +16,7 @@ export default function TopBar({
         <div className="flex w-20 items-center justify-start">{left}</div>
         <div className="min-w-0 text-center">
           {title ?? (
-            <Link href="/groups" className="font-script text-3xl leading-none">
+            <Link href="/" className="font-script text-3xl leading-none">
               Airball
             </Link>
           )}

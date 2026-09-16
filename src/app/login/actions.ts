@@ -25,7 +25,7 @@ export async function signIn(
   }
 
   revalidatePath("/", "layout");
-  redirect("/groups");
+  redirect("/");
 }
 
 export async function signUp(
@@ -56,7 +56,7 @@ export async function signUp(
   }
 
   revalidatePath("/", "layout");
-  redirect("/groups");
+  redirect("/");
 }
 
 export async function signOut() {

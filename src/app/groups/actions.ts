@@ -25,7 +25,7 @@ export async function createGroup(
 
   if (error) return { error: error.message };
 
-  revalidatePath("/groups");
+  revalidatePath("/");
   redirect(`/g/${data}`);
 }
 
@@ -50,6 +50,6 @@ export async function joinWithCode(
       : { error: error.message };
   }
 
-  revalidatePath("/groups");
+  revalidatePath("/");
   redirect(`/g/${data}`);
 }
