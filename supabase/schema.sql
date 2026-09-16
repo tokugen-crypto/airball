@@ -236,7 +236,11 @@ $$;
 -- ── The feed view: where airball and rebound are computed ─────────────────
 -- security_invoker means this view respects the caller's RLS on `hangouts`.
 
-create or replace view public.hangout_feed
+-- Dropped rather than replaced: CREATE OR REPLACE VIEW can only append
+-- columns, never reorder them, so re-running would fail after any change.
+drop view if exists public.hangout_feed;
+
+create view public.hangout_feed
 with (security_invoker = true) as
 select
   h.id,

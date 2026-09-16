@@ -96,7 +96,12 @@ update public.hangouts
 -- clearing someone else's attendance row. So the view answers it instead:
 -- once a hangout is over, here_count is 0 regardless of stale rows.
 
-create or replace view public.hangout_feed
+-- Dropped rather than replaced: CREATE OR REPLACE VIEW can only append
+-- columns, never reorder or rename them, so it fails against an existing
+-- view whose shape differs at all.
+drop view if exists public.hangout_feed;
+
+create view public.hangout_feed
 with (security_invoker = true) as
 select
   h.id,
