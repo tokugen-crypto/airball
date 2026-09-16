@@ -199,10 +199,12 @@ grant select on public.message_feed  to authenticated;
 -- see about other people comes through the views above, stripped of ids.
 
 drop policy if exists hangouts_read on public.hangouts;
+drop policy if exists hangouts_read_own on public.hangouts;
 create policy hangouts_read_own on public.hangouts
   for select using (author_id = auth.uid());
 
 drop policy if exists messages_read on public.messages;
+drop policy if exists messages_read_own on public.messages;
 create policy messages_read_own on public.messages
   for select using (user_id = auth.uid());
 
